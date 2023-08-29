@@ -8,13 +8,14 @@
 #include "types.h"
 #include "udp_proto.h"
 #include "bitvector.h"
+#include "crashhandler.h"
 
 static const int UDP_HEADER_SIZE = 28;     /* Size of IP + UDP headers */
 static const int NUM_SYNC_PACKETS = 5;
 static const int SYNC_RETRY_INTERVAL = 2000;
 static const int SYNC_FIRST_RETRY_INTERVAL = 500;
-static const int RUNNING_RETRY_INTERVAL = 200;
-static const int KEEP_ALIVE_INTERVAL    = 200;
+static const int RUNNING_RETRY_INTERVAL = 350;
+static const int KEEP_ALIVE_INTERVAL    = 350;
 static const int QUALITY_REPORT_INTERVAL = 1000;
 static const int NETWORK_STATS_INTERVAL  = 1000;
 static const int UDP_SHUTDOWN_TIMER = 5000;
@@ -122,7 +123,11 @@ UdpProtocol::SendPendingOutput()
       msg->u.input.start_frame = _pending_output.front().frame;
       msg->u.input.input_size = (uint8)_pending_output.front().size;
 
-      ASSERT(last.frame == -1 || last.frame + 1 == msg->u.input.start_frame);
+      if (last.frame != -1 || last.frame + 1 < msg->u.input.start_frame)
+      {
+          Log("Desync occurred, sending frame anyway\n");
+          last.frame = msg->u.input.start_frame;
+      }
       for (j = 0; j < _pending_output.size(); j++) {
          GameInput &current = _pending_output.item(j);
          if (memcmp(current.bits, last.bits, current.size) != 0) {
@@ -533,7 +538,10 @@ UdpProtocol::OnInput(UdpMsg *msg, int len)
        */
       UdpMsg::connect_status* remote_status = msg->u.input.peer_connect_status;
       for (int i = 0; i < ARRAY_SIZE(_peer_connect_status); i++) {
-         ASSERT(remote_status[i].last_frame >= _peer_connect_status[i].last_frame);
+         if(remote_status[i].last_frame < _peer_connect_status[i].last_frame)
+         {
+             HandleCrash();
+         }
          _peer_connect_status[i].disconnected = _peer_connect_status[i].disconnected || remote_status[i].disconnected;
          _peer_connect_status[i].last_frame = MAX(_peer_connect_status[i].last_frame, remote_status[i].last_frame);
       }
@@ -558,7 +566,11 @@ UdpProtocol::OnInput(UdpMsg *msg, int len)
           * Keep walking through the frames (parsing bits) until we reach
           * the inputs for the frame right after the one we're on.
           */
-         ASSERT(currentFrame <= (_last_received_input.frame + 1));
+          if (currentFrame > (_last_received_input.frame + 1))
+          {
+              Log("Spectator is desynced\n");
+              HandleCrash();
+          }
          bool useInputs = currentFrame == _last_received_input.frame + 1;
 
          while (BitVector_ReadBit(bits, &offset)) {

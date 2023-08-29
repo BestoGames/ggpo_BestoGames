@@ -28,6 +28,7 @@ void Log(const char *fmt, ...)
 
 void Logv(const char *fmt, va_list args)
 {
+    
    if (!Platform::GetConfigBool("ggpo.log") || Platform::GetConfigBool("ggpo.log.ignore")) {
       return;
    }
