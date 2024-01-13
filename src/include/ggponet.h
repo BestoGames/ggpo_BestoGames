@@ -566,8 +566,6 @@ GGPO_API void __cdecl ggpo_logv(GGPOSession *,
                                 const char *fmt,
                                 va_list args);
 
-typedef void (*CrashDelegate)();
-GGPO_API void __cdecl ggpo_init_crashdelegate(CrashDelegate callback);
 #ifdef __cplusplus
 };
 #endif
